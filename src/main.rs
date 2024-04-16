@@ -1,6 +1,6 @@
 mod utils;
 use std::env;
-use utils::helper;
+use utils::zipperman;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -10,7 +10,7 @@ fn main() {
         return;
     }
 
-    match helper::determine_locality_and_unzip(&args[1], &args[2]) {
+    match zipperman::determine_locality_and_unzip(&args[1], &args[2]) {
         Ok(_) => println!("Your Pantz Have Been Unzipped!!"),
         Err(e) => println!("Something Happened While Unzipping Pantz : {:?}", e),
     }
