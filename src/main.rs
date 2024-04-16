@@ -1,7 +1,6 @@
 mod utils;
 use std::env;
-use std::path::{Path, PathBuf};
-use utils::zipperman;
+use utils::helper;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -11,10 +10,7 @@ fn main() {
         return;
     }
 
-    let src_path: &Path = Path::new(&args[1]);
-    let dest_path: &Path = Path::new(&args[2]);
-
-    match zipperman::unzip_pantz(src_path, dest_path) {
+    match helper::determine_locality_and_unzip(&args[1], &args[2]) {
         Ok(_) => println!("Your Pantz Have Been Unzipped!!"),
         Err(e) => println!("Something Happened While Unzipping Pantz : {:?}", e),
     }
