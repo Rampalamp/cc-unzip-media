@@ -14,13 +14,22 @@ impl ZIPError {
     }
 
     pub fn show_instructions(&self) {
+        for _ in 0..3 {
+            println!();
+        }
         println!("Oops! Looks like your zipper is stuck, don't fuss or do anything sudden, maybe we can get through this unharmed.");
         println!(
-            "I am expecting <Source> absolute path, followed by a <Destination> absolute path..."
+            "I am expecting a <Source> absolute path, followed by a <Destination> absolute path..."
         );
         println!("ie. 'cc-unzip-media /home/user/doc/src /home/user/doc/dest'");
         println!("You can also preceed both the <Source> and <Destination> paths with the '-n' flag for transfers over network.");
-        println!("You will be prompted for network credentials.");
+        println!("ie. 'cc-unzip-media -n /home/user/doc/src -n /home/user/doc/dest'");
+        println!(
+            "You will be prompted for network credentials depending which path requires them."
+        );
+        for _ in 0..3 {
+            println!();
+        }
     }
 }
 
