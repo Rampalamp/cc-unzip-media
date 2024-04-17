@@ -1,4 +1,3 @@
-use crate::utils::sshinfo::SSHInfo;
 use rar::Archive;
 use ssh2::Session;
 use std::error::Error;
@@ -70,12 +69,7 @@ fn unzip_pantz_net(src: &str, dest: &str) -> Result<(), Box<dyn std::error::Erro
     let host: String = String::from("host");
     let port: i32 = String::from("").parse::<i32>().unwrap();
 
-    match SSHInfo::parse_ssh_info("") {
-        Ok(info) => {
-            //Need setup this https://docs.rs/ssh2/latest/ssh2/ using ssh_info
-        }
-        Err(e) => eprintln!("Error: {}", e),
-    }
+    //Need setup this https://docs.rs/ssh2/latest/ssh2/ using ssh_info
 
     let mut ssh: Session = Session::new()?;
 

@@ -1,17 +1,17 @@
-mod utils;
+mod zipmod;
 use std::env;
-use utils::zipperman;
+use zipmod::zipassist;
+use zipmod::ziperror;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    if args.len() != 3 {
-        println!("Usage: {} <src> <dest>", args[0]);
-        return;
-    }
-
-    match zipperman::determine_locality_and_unzip(&args[1], &args[2]) {
+    match zipassist::try_unzip(env::args().collect()) {
         Ok(_) => println!("Your Pantz Have Been Unzipped!!"),
-        Err(e) => println!("Something Happened While Unzipping Pantz : {:?}", e),
+        Err(e) => {
+            e.show_instructions();
+            println!(
+                "Something Went Wrong While Unzipping Your Pantz : {}",
+                e.message
+            )
+        }
     }
 }
