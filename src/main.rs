@@ -1,7 +1,6 @@
 mod zipmod;
 use std::env;
 use zipmod::zipassist;
-use zipmod::ziperror;
 
 fn main() {
     match zipassist::try_unzip(env::args().collect()) {

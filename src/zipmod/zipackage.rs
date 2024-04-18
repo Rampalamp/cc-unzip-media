@@ -4,7 +4,7 @@ use std::path::PathBuf;
 pub struct ZIPackage {
     pub path: PathBuf,
     pub host: String,
-    pub port: u32,
+    pub port: u16,
     pub username: String,
     pub password: String,
 }
