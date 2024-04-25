@@ -1,5 +1,6 @@
 use super::zipackage::ZIPackage;
 use super::ziperror::ZIPError;
+use super::zipperman::determine_locality_and_unzip;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
@@ -12,25 +13,10 @@ use std::path::PathBuf;
 
 pub fn try_unzip(args: Vec<String>) -> Result<(), ZIPError> {
     match validate_args(args) {
-        Ok((src, dest)) => {
-            println!(
-                "SOURCE Path {}, Host {}, Port {}, UN {}, Pass {}",
-                src.path.display(),
-                src.host,
-                src.port,
-                src.username,
-                src.password
-            );
-            println!(
-                "DEST Path {}, Host {}, Port {}, UN {}, Pass {}",
-                dest.path.display(),
-                dest.host,
-                dest.port,
-                dest.username,
-                dest.password
-            );
-            Ok(())
-        }
+        Ok((src, dest)) => match determine_locality_and_unzip(src, dest) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        },
         Err(e) => Err(e),
     }
 }
