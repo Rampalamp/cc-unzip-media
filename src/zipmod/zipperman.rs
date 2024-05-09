@@ -10,14 +10,20 @@ use std::path::PathBuf;
 use zip::read::ZipArchive;
 
 pub fn determine_locality_and_unzip(src: ZIPackage, dest: ZIPackage) -> Result<(), ZIPError> {
-    //check out the ZIPAckages, see which ones need ssh channels
-    //if none needed, can just call unzip pantz,
-    //if any ssh needed, unzip_pantz_net
-
-    Ok(())
+    if src.host.trim().is_empty() && dest.host.trim().is_empty() {
+        match unzip_pantz(&src.path, &dest.path) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
+    } else {
+        match unzip_pantz_net(src, dest) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
 }
 
-fn unzip_pantz(src: &PathBuf, dest: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn unzip_pantz(src: &PathBuf, dest: &PathBuf) -> Result<(), ZIPError> {
     let src_entries = fs::read_dir(src)?;
 
     for entry in src_entries {
@@ -50,7 +56,7 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf) -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
-fn unzip_pantz_net(src: &str, dest: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn unzip_pantz_net(src: ZIPackage, dest: ZIPackage) -> Result<(), ZIPError> {
     //parse paths, determine which ones need ssh.
 
     //parse outhost and
@@ -58,10 +64,18 @@ fn unzip_pantz_net(src: &str, dest: &str) -> Result<(), Box<dyn std::error::Erro
     let port: i32 = String::from("").parse::<i32>().unwrap();
 
     //Need setup this https://docs.rs/ssh2/latest/ssh2/ using ssh_info
+    let conn_string = format!("{}:{}", src.host, src.port);
+    match TcpStream::connect(conn_string) {
+        Ok(tcp) => {
+            let mut ssh: Session = Session::new().unwrap();
 
-    let mut ssh: Session = Session::new()?;
-
-    ssh.handshake()?;
+            match ssh.handshake() {
+                Ok(_) => {}
+                Err(e) => return Err(ZIPError::new(e.message())),
+            }
+        }
+        Err(e) => return Err(e.into()),
+    }
 
     Ok(())
 }

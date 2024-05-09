@@ -33,10 +33,16 @@ impl ZIPError {
     }
 }
 
+impl Error for ZIPError {}
+
 impl fmt::Display for ZIPError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.message)
     }
 }
 
-impl Error for ZIPError {}
+impl From<std::io::Error> for ZIPError {
+    fn from(error: std::io::Error) -> Self {
+        ZIPError::new(&error.to_string())
+    }
+}

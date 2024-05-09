@@ -25,16 +25,16 @@ fn validate_args(args: Vec<String>) -> Result<(ZIPackage, ZIPackage), ZIPError> 
     //Everything should start off count of args, whatever the count is determines what we need to check next.
     //5 = 2 paths needing network
     //4 = 2 paths but one needs networking
-    // 3 = local
-    //anyhting else is an issue.
-    let mut src_zipackage = ZIPackage {
+    //3 = local
+    //anything else is no bueno.
+    let mut src_zipackage: ZIPackage = ZIPackage {
         path: PathBuf::new(),
         host: String::new(),
         port: 0,
         username: String::new(),
         password: String::new(),
     };
-    let mut dest_zipackage = ZIPackage {
+    let mut dest_zipackage: ZIPackage = ZIPackage {
         path: PathBuf::new(),
         host: String::new(),
         port: 0,
