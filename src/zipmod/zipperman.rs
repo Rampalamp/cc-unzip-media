@@ -136,13 +136,14 @@ fn process_zip_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<PathBuf, Z
         }
     }
 }
+
 fn copy_and_cleanup(temp_path: &PathBuf, destination: PathBuf) -> io::Result<()> {
     //copy recursively
     for entry in fs::read_dir(&temp_path)? {
-        let entry = entry?;
-        let path = entry.path();
-        let relative_path = path.strip_prefix(&temp_path).unwrap();
-        let dest_path = destination.join(relative_path);
+        let entry: fs::DirEntry = entry?;
+        let path: PathBuf = entry.path();
+        let relative_path: &std::path::Path = path.strip_prefix(&temp_path).unwrap();
+        let dest_path: PathBuf = destination.join(relative_path);
 
         if path.is_dir() {
             fs::create_dir_all(&dest_path)?;
@@ -154,8 +155,8 @@ fn copy_and_cleanup(temp_path: &PathBuf, destination: PathBuf) -> io::Result<()>
 
     //cleanup
     for entry in fs::read_dir(&temp_path)? {
-        let entry = entry?;
-        let path = entry.path();
+        let entry: fs::DirEntry = entry?;
+        let path: PathBuf = entry.path();
         if path.is_dir() {
             fs::remove_dir_all(&path)?;
         } else {
@@ -170,7 +171,7 @@ fn copy_directory_recursive(source: &PathBuf, destination: &PathBuf) -> io::Resu
     for entry in fs::read_dir(source)? {
         let entry: fs::DirEntry = entry?;
         let path: PathBuf = entry.path();
-        let dest_path = destination.join(entry.file_name());
+        let dest_path: PathBuf = destination.join(entry.file_name());
 
         if path.is_dir() {
             fs::create_dir_all(&dest_path)?;
