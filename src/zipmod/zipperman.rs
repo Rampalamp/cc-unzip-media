@@ -3,10 +3,14 @@ use super::ziperror::ZIPError;
 use rar::Archive;
 use ssh2::Session;
 use std::error::Error;
-use std::fs;
+use std::fs::File;
+use std::io;
 use std::io::Read;
+use std::iter::Zip;
 use std::net::TcpStream;
+use std::os::windows::process;
 use std::path::PathBuf;
+use std::{env, fs};
 use zip::read::ZipArchive;
 
 pub fn determine_locality_and_unzip(src: ZIPackage, dest: ZIPackage) -> Result<(), ZIPError> {
@@ -24,6 +28,19 @@ pub fn determine_locality_and_unzip(src: ZIPackage, dest: ZIPackage) -> Result<(
 }
 
 fn unzip_pantz(src: &PathBuf, dest: &PathBuf) -> Result<(), ZIPError> {
+    let base_temp_dir = env::temp_dir();
+
+    let mut ccunzip_temp_dir = PathBuf::from(base_temp_dir);
+
+    ccunzip_temp_dir.push("ccunzip_temp_dir");
+
+    if !ccunzip_temp_dir.exists() {
+        match fs::create_dir_all(&ccunzip_temp_dir) {
+            Ok(_) => println!("ccunzip_temp_dir created : {:?}", ccunzip_temp_dir),
+            Err(e) => println!("Failed to create directory: {}", e),
+        }
+    }
+
     let src_entries = fs::read_dir(src)?;
 
     for entry in src_entries {
@@ -41,6 +58,13 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf) -> Result<(), ZIPError> {
         if src_path.extension().map_or(false, |ext| ext == "zip") {
             let folder_name: String = String::from(src.file_name().unwrap().to_str().unwrap());
             println!("Processing ZIP File : {}", folder_name);
+            match process_zip_file(src_path, &ccunzip_temp_dir) {
+                Ok(path) => {
+                    println!("Copying Unzipped Contents And Cleaning Up...");
+                    copy_and_cleanup(&ccunzip_temp_dir, dest_path)?
+                }
+                Err(e) => println!("Error : {}", e),
+            }
             continue;
         }
         //consider using unrar package instead of rar?
@@ -50,7 +74,9 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf) -> Result<(), ZIPError> {
             continue;
         }
 
-        fs::copy(&src_path, &dest_path)?;
+        if is_media_file(&src_path) {
+            fs::copy(&src_path, &dest_path)?;
+        }
     }
 
     Ok(())
@@ -78,4 +104,93 @@ fn unzip_pantz_net(src: ZIPackage, dest: ZIPackage) -> Result<(), ZIPError> {
     }
 
     Ok(())
+}
+
+fn process_zip_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<PathBuf, ZIPError> {
+    //dest_path in this case should be the temp dir created at start of the program
+    //src_path should be full path to the actual .zip file...
+    let file: File = File::open(&src_path)?;
+    match ZipArchive::new(file) {
+        Ok(mut archive) => {
+            for i in 0..archive.len() {
+                let mut file = archive.by_index(i).unwrap();
+                let outpath: PathBuf = dest_path.join(file.name());
+
+                if (*file.name()).ends_with('/') {
+                    fs::create_dir_all(&outpath);
+                } else {
+                    if let Some(p) = outpath.parent() {
+                        if !p.exists() {
+                            fs::create_dir_all(&p)?;
+                        }
+                    }
+                    let mut outfile = File::create(&outpath)?;
+                    io::copy(&mut file, &mut outfile);
+                }
+            }
+            Ok(dest_path.clone())
+        }
+        Err(e) => {
+            println!("Error : {}", e);
+            Err(ZIPError::new("Error when creating ZipArchive"))
+        }
+    }
+}
+fn copy_and_cleanup(temp_path: &PathBuf, destination: PathBuf) -> io::Result<()> {
+    //copy recursively
+    for entry in fs::read_dir(&temp_path)? {
+        let entry = entry?;
+        let path = entry.path();
+        let relative_path = path.strip_prefix(&temp_path).unwrap();
+        let dest_path = destination.join(relative_path);
+
+        if path.is_dir() {
+            fs::create_dir_all(&dest_path)?;
+            copy_directory_recursive(&path, &dest_path)?;
+        } else {
+            fs::copy(&path, &dest_path)?;
+        }
+    }
+
+    //cleanup
+    for entry in fs::read_dir(&temp_path)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            fs::remove_dir_all(&path)?;
+        } else {
+            fs::remove_file(&path)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn copy_directory_recursive(source: &PathBuf, destination: &PathBuf) -> io::Result<()> {
+    for entry in fs::read_dir(source)? {
+        let entry: fs::DirEntry = entry?;
+        let path: PathBuf = entry.path();
+        let dest_path = destination.join(entry.file_name());
+
+        if path.is_dir() {
+            fs::create_dir_all(&dest_path)?;
+            copy_directory_recursive(&path, &dest_path)?;
+        } else {
+            fs::copy(&path, &dest_path)?;
+        }
+    }
+    Ok(())
+}
+
+fn is_media_file(path: &PathBuf) -> bool {
+    if let Some(extension) = path.extension() {
+        match extension.to_str().unwrap().to_lowercase().as_str() {
+            "mp4" | "avi" | "mov" | "mkv" | "webm" | "wmv" => true, // Video extensions
+            "mp3" | "wav" | "flac" | "aac" | "ogg" | "wma" => true, // Audio extensions
+            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "tiff" | "svg" => true, // Image extensions
+            _ => false,
+        }
+    } else {
+        false
+    }
 }
