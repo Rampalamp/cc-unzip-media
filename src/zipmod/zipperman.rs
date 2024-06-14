@@ -1,21 +1,18 @@
 use super::zipackage::ZIPackage;
 use super::ziperror::ZIPError;
-use rar::Archive;
 use ssh2::Session;
-use std::error::Error;
 use std::fs::File;
 use std::io;
-use std::io::Read;
-use std::iter::Zip;
 use std::net::TcpStream;
-use std::os::windows::process;
 use std::path::PathBuf;
 use std::{env, fs};
+use unrar::error::UnrarError;
+use unrar::{Archive, CursorBeforeHeader, OpenArchive, Process};
 use zip::read::ZipArchive;
 
 pub fn determine_locality_and_unzip(src: ZIPackage, dest: ZIPackage) -> Result<(), ZIPError> {
     if src.host.trim().is_empty() && dest.host.trim().is_empty() {
-        match unzip_pantz(&src.path, &dest.path) {
+        match unzip_pantz(&src.path, &dest.path, &mut PathBuf::new()) {
             Ok(_) => Ok(()),
             Err(e) => Err(e),
         }
@@ -27,55 +24,67 @@ pub fn determine_locality_and_unzip(src: ZIPackage, dest: ZIPackage) -> Result<(
     }
 }
 
-fn unzip_pantz(src: &PathBuf, dest: &PathBuf) -> Result<(), ZIPError> {
-    let base_temp_dir = env::temp_dir();
+fn unzip_pantz(src: &PathBuf, dest: &PathBuf, temp: &mut PathBuf) -> Result<(), ZIPError> {
+    if temp.as_os_str().is_empty() {
+        let base_temp_dir: PathBuf = env::temp_dir();
 
-    let mut ccunzip_temp_dir = PathBuf::from(base_temp_dir);
+        *temp = PathBuf::from(base_temp_dir);
+        temp.push("ccunzip_temp_dir");
+    }
 
-    ccunzip_temp_dir.push("ccunzip_temp_dir");
-
-    if !ccunzip_temp_dir.exists() {
-        match fs::create_dir_all(&ccunzip_temp_dir) {
-            Ok(_) => println!("ccunzip_temp_dir created : {:?}", ccunzip_temp_dir),
+    if !temp.exists() {
+        match fs::create_dir_all(&temp) {
+            Ok(_) => println!("ccunzip_temp_dir created : {:?}", temp),
             Err(e) => println!("Failed to create directory: {}", e),
         }
     }
 
-    let src_entries = fs::read_dir(src)?;
+    let src_entries: fs::ReadDir = fs::read_dir(src)?;
 
     for entry in src_entries {
         let entry: fs::DirEntry = entry?;
-        let file_type: fs::FileType = entry.file_type()?;
         let src_path: PathBuf = entry.path();
+        //assign dest_path like this on a .rar file is causing a bad path when trying to copy from temp to dest_path
         let dest_path: PathBuf = dest.join(entry.file_name());
-        //for some reason even when using continue, it is copying all of the files. in theory only files that are copied are not .zip or .rar.
-        if file_type.is_dir() {
+
+        if entry.file_type()?.is_dir() {
             fs::create_dir_all(&dest_path)?;
-            unzip_pantz(&src_path, &dest_path)?;
+            unzip_pantz(&src_path, &dest_path, temp)?;
             continue;
         }
 
-        if src_path.extension().map_or(false, |ext| ext == "zip") {
-            let folder_name: String = String::from(src.file_name().unwrap().to_str().unwrap());
-            println!("Processing ZIP File : {}", folder_name);
-            match process_zip_file(src_path, &ccunzip_temp_dir) {
-                Ok(path) => {
-                    println!("Copying Unzipped Contents And Cleaning Up...");
-                    copy_and_cleanup(&ccunzip_temp_dir, dest_path)?
+        match src_path.extension().and_then(|ext| ext.to_str()) {
+            Some("zip") => {
+                println!(
+                    "Processing ZIP File : {}",
+                    src.file_name().unwrap().to_str().unwrap()
+                );
+                match process_zip_file(src_path, &temp) {
+                    Ok(_) => {
+                        println!("Copying Unzipped Contents And Cleaning Up...");
+                        copy_and_cleanup(&temp, dest)?;
+                    }
+                    Err(e) => println!("Error : {}", e),
                 }
-                Err(e) => println!("Error : {}", e),
             }
-            continue;
-        }
-        //consider using unrar package instead of rar?
-        if src_path.extension().map_or(false, |ext| ext == "rar") {
-            let folder_name: String = String::from(src.file_name().unwrap().to_str().unwrap());
-            println!("Processing RAR File : {}", folder_name);
-            continue;
-        }
-
-        if is_media_file(&src_path) {
-            fs::copy(&src_path, &dest_path)?;
+            Some("rar") => {
+                println!(
+                    "Processing RAR File : {}",
+                    src.file_name().unwrap().to_str().unwrap()
+                );
+                match process_rar_file(src_path, &temp) {
+                    Ok(_) => {
+                        println!("Copying Unrarred Contents And Cleaning Up...");
+                        copy_and_cleanup(&temp, dest)?;
+                    }
+                    Err(e) => println!("Error {}", e),
+                }
+            }
+            _ => {
+                if is_media_file(&src_path) {
+                    fs::copy(&src_path, &dest_path)?;
+                }
+            }
         }
     }
 
@@ -106,7 +115,7 @@ fn unzip_pantz_net(src: ZIPackage, dest: ZIPackage) -> Result<(), ZIPError> {
     Ok(())
 }
 
-fn process_zip_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<PathBuf, ZIPError> {
+fn process_zip_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<(), ZIPError> {
     //dest_path in this case should be the temp dir created at start of the program
     //src_path should be full path to the actual .zip file...
     let file: File = File::open(&src_path)?;
@@ -125,10 +134,10 @@ fn process_zip_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<PathBuf, Z
                         }
                     }
                     let mut outfile = File::create(&outpath)?;
-                    io::copy(&mut file, &mut outfile);
+                    io::copy(&mut file, &mut outfile)?;
                 }
             }
-            Ok(dest_path.clone())
+            Ok(())
         }
         Err(e) => {
             println!("Error : {}", e);
@@ -137,7 +146,33 @@ fn process_zip_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<PathBuf, Z
     }
 }
 
-fn copy_and_cleanup(temp_path: &PathBuf, destination: PathBuf) -> io::Result<()> {
+fn process_rar_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<(), UnrarError> {
+    //dest_path should just be the ccunzip_temp_dir dir
+    //src_path should be the actual .rar file
+
+    let mut archive: OpenArchive<Process, CursorBeforeHeader> =
+        Archive::new(src_path.to_str().unwrap())
+            .open_for_processing()
+            .unwrap();
+    while let Some(header) = archive.read_header()? {
+        println!(
+            "{} bytes: {}",
+            header.entry().unpacked_size,
+            header.entry().filename.to_string_lossy(),
+        );
+        let file_name = header.entry().filename.clone();
+        let outpath = dest_path.join(file_name);
+        archive = if header.entry().is_file() {
+            header.extract_to(outpath)?
+        } else {
+            header.skip()?
+        };
+    }
+
+    Ok(())
+}
+
+fn copy_and_cleanup(temp_path: &PathBuf, destination: &PathBuf) -> io::Result<()> {
     //copy recursively
     for entry in fs::read_dir(&temp_path)? {
         let entry: fs::DirEntry = entry?;
@@ -189,6 +224,7 @@ fn is_media_file(path: &PathBuf) -> bool {
             "mp4" | "avi" | "mov" | "mkv" | "webm" | "wmv" => true, // Video extensions
             "mp3" | "wav" | "flac" | "aac" | "ogg" | "wma" => true, // Audio extensions
             "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "tiff" | "svg" => true, // Image extensions
+            "srt" | "sub" | "ssa" | "ass" | "vtt" | "smi" => true, // Subtitle extensions
             _ => false,
         }
     } else {

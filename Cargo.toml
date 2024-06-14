@@ -8,6 +8,6 @@ edition = "2021"
 
 [dependencies]
 zip = "0.6.6"
-rar = "0.2.0"
+unrar = "0.5.3"
 ssh2 = "0.9.4"
 rpassword = "7.3.1"
