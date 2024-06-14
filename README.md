@@ -1,5 +1,8 @@
 # cc-unzip-media
 
-EVENTUALLY... This program is intended to loop through a source directory (where presumably torrents or media exists), unzipping any necessary files before moving them to a destination directory.
+Local to local is setup, but transfering over network is not setup yet.
 
+WARNING -- This does not check to see if a file of the same name already exists at the destinations path, therefore it will overwrite any existing files.
+
+** Example command to run (no flags used)**
 .\build_and_run.bat "C:\unzip-src" "C:\unzip-dest"

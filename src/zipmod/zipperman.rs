@@ -44,7 +44,6 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf, temp: &mut PathBuf) -> Result<(), 
     for entry in src_entries {
         let entry: fs::DirEntry = entry?;
         let src_path: PathBuf = entry.path();
-        //assign dest_path like this on a .rar file is causing a bad path when trying to copy from temp to dest_path
         let dest_path: PathBuf = dest.join(entry.file_name());
 
         if entry.file_type()?.is_dir() {
@@ -52,36 +51,35 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf, temp: &mut PathBuf) -> Result<(), 
             unzip_pantz(&src_path, &dest_path, temp)?;
             continue;
         }
+        //If I wanted to check to see if a file exists, ideally it would be done around here before any unzipping to the temp folder of machine executing program.
 
         match src_path.extension().and_then(|ext| ext.to_str()) {
             Some("zip") => {
                 println!(
                     "Processing ZIP File : {}",
-                    src.file_name().unwrap().to_str().unwrap()
+                    src_path.file_name().unwrap().to_str().unwrap()
                 );
                 match process_zip_file(src_path, &temp) {
-                    Ok(_) => {
-                        println!("Copying Unzipped Contents And Cleaning Up...");
-                        copy_and_cleanup(&temp, dest)?;
-                    }
+                    Ok(_) => copy_and_cleanup(&temp, dest)?,
                     Err(e) => println!("Error : {}", e),
                 }
             }
             Some("rar") => {
                 println!(
                     "Processing RAR File : {}",
-                    src.file_name().unwrap().to_str().unwrap()
+                    src_path.file_name().unwrap().to_str().unwrap()
                 );
                 match process_rar_file(src_path, &temp) {
-                    Ok(_) => {
-                        println!("Copying Unrarred Contents And Cleaning Up...");
-                        copy_and_cleanup(&temp, dest)?;
-                    }
+                    Ok(_) => copy_and_cleanup(&temp, dest)?,
                     Err(e) => println!("Error {}", e),
                 }
             }
             _ => {
                 if is_media_file(&src_path) {
+                    println!(
+                        "Processing Media File : {}",
+                        src_path.file_name().unwrap().to_str().unwrap()
+                    );
                     fs::copy(&src_path, &dest_path)?;
                 }
             }
@@ -147,19 +145,11 @@ fn process_zip_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<(), ZIPErr
 }
 
 fn process_rar_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<(), UnrarError> {
-    //dest_path should just be the ccunzip_temp_dir dir
-    //src_path should be the actual .rar file
-
     let mut archive: OpenArchive<Process, CursorBeforeHeader> =
         Archive::new(src_path.to_str().unwrap())
             .open_for_processing()
             .unwrap();
     while let Some(header) = archive.read_header()? {
-        println!(
-            "{} bytes: {}",
-            header.entry().unpacked_size,
-            header.entry().filename.to_string_lossy(),
-        );
         let file_name = header.entry().filename.clone();
         let outpath = dest_path.join(file_name);
         archive = if header.entry().is_file() {
