@@ -4,7 +4,9 @@ use ssh2::Session;
 use std::fs::File;
 use std::io;
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::thread::sleep;
+use std::time::Duration;
 use std::{env, fs};
 use unrar::error::UnrarError;
 use unrar::{Archive, CursorBeforeHeader, OpenArchive, Process};
@@ -52,10 +54,10 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf, temp: &mut PathBuf) -> Result<(), 
             continue;
         }
         //If I wanted to check to see if a file exists, ideally it would be done around here before any unzipping to the temp folder of machine executing program.
-        if dest_path.exists() {
+        if file_stem_exists(&src_path, &dest_path) {
             println!(
-                "Destination Directory Already Exists SKIPPING... {}",
-                dest.to_str().unwrap()
+                "Found Existing File Stem SKIPPING... {}",
+                dest_path.to_str().unwrap()
             );
             continue;
         }
@@ -87,7 +89,11 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf, temp: &mut PathBuf) -> Result<(), 
                         "Processing Media File : {}",
                         src_path.file_name().unwrap().to_str().unwrap()
                     );
-                    fs::copy(&src_path, &dest_path)?;
+                    match copy_with_retries(&src_path, &dest_path, 3, Duration::from_secs(2)) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Failed to copy file: {:?}", e),
+                    }
+                    //fs::copy(&src_path, &dest_path)?;
                 }
             }
         }
@@ -152,18 +158,21 @@ fn process_zip_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<(), ZIPErr
 }
 
 fn process_rar_file(src_path: PathBuf, dest_path: &PathBuf) -> Result<(), UnrarError> {
-    let mut archive: OpenArchive<Process, CursorBeforeHeader> =
-        Archive::new(src_path.to_str().unwrap())
-            .open_for_processing()
-            .unwrap();
-    while let Some(header) = archive.read_header()? {
-        let file_name = header.entry().filename.clone();
-        let outpath = dest_path.join(file_name);
-        archive = if header.entry().is_file() {
-            header.extract_to(outpath)?
-        } else {
-            header.skip()?
-        };
+    match Archive::new(src_path.to_str().unwrap()).open_for_processing() {
+        Ok(mut archive) => {
+            while let Some(header) = archive.read_header()? {
+                let file_name = header.entry().filename.clone();
+                let outpath = dest_path.join(file_name);
+                archive = if header.entry().is_file() {
+                    header.extract_to(outpath)?
+                } else {
+                    header.skip()?
+                };
+            }
+        }
+        Err(e) => {
+            println!("UnrarError : {}", e)
+        }
     }
 
     Ok(())
@@ -181,7 +190,11 @@ fn copy_and_cleanup(temp_path: &PathBuf, destination: &PathBuf) -> io::Result<()
             fs::create_dir_all(&dest_path)?;
             copy_directory_recursive(&path, &dest_path)?;
         } else {
-            fs::copy(&path, &dest_path)?;
+            match copy_with_retries(&path, &dest_path, 3, Duration::from_secs(2)) {
+                Ok(_) => {}
+                Err(e) => eprintln!("Failed to copy file: {:?}", e),
+            }
+            //fs::copy(&path, &dest_path)?;
         }
     }
 
@@ -209,7 +222,10 @@ fn copy_directory_recursive(source: &PathBuf, destination: &PathBuf) -> io::Resu
             fs::create_dir_all(&dest_path)?;
             copy_directory_recursive(&path, &dest_path)?;
         } else {
-            fs::copy(&path, &dest_path)?;
+            match copy_with_retries(&path, &dest_path, 3, Duration::from_secs(2)) {
+                Ok(_) => {}
+                Err(e) => eprintln!("Failed to copy file: {:?}", e),
+            }
         }
     }
     Ok(())
@@ -227,4 +243,62 @@ fn is_media_file(path: &PathBuf) -> bool {
     } else {
         false
     }
+}
+
+fn file_stem_exists(src_path: &PathBuf, dest_path: &PathBuf) -> bool {
+    // Get the file stem of the src_path
+    let src_stem = src_path.file_stem().and_then(|s| s.to_str());
+
+    // Get the parent directory of dest_path
+    let dest_dir = dest_path
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .to_path_buf();
+
+    // Iterate over the files in the destination directory
+    if let Ok(entries) = fs::read_dir(dest_dir) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.is_file() {
+                    // Get the file stem of the current file
+                    let dest_stem = path
+                        .file_stem()
+                        .and_then(|s| s.to_str().map(|s| s.to_lowercase()));
+                    // Compare the file stems
+                    if src_stem == dest_stem.as_deref() {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+fn copy_with_retries(
+    src: &PathBuf,
+    dest: &PathBuf,
+    retries: u32,
+    delay: Duration,
+) -> io::Result<()> {
+    for attempt in 0..retries {
+        match fs::copy(src, dest) {
+            Ok(_) => return Ok(()),
+            Err(e) if attempt < retries - 1 => {
+                eprintln!(
+                    "Attempt {}: Failed to copy file: {}. Retrying in {:?}...",
+                    attempt + 1,
+                    e,
+                    delay
+                );
+                sleep(delay);
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::Other,
+        "Failed to copy file after multiple attempts",
+    ))
 }
