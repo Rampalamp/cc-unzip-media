@@ -52,8 +52,11 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf, temp: &mut PathBuf) -> Result<(), 
             continue;
         }
         //If I wanted to check to see if a file exists, ideally it would be done around here before any unzipping to the temp folder of machine executing program.
-        if dest.exists() {
-            println!("Destination Directory Already Exists SKIPPING...");
+        if dest_path.exists() {
+            println!(
+                "Destination Directory Already Exists SKIPPING... {}",
+                dest.to_str().unwrap()
+            );
             continue;
         }
 
