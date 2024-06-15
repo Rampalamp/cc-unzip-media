@@ -54,6 +54,9 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf, temp: &mut PathBuf) -> Result<(), 
             continue;
         }
         //If I wanted to check to see if a file exists, ideally it would be done around here before any unzipping to the temp folder of machine executing program.
+        //this film stem check is kinda not the greatest, many subtitles are being ommitted because they have the same name but different extension...
+        //Probably need a more thorough approach to checking for duplicates
+        //and then in the process_rar_file I likely need to use the List function to grab the file name, then check if they exist in the dest_path already?
         if file_stem_exists(&src_path, &dest_path) {
             println!(
                 "Found Existing File Stem SKIPPING... {}",
@@ -247,10 +250,10 @@ fn is_media_file(path: &PathBuf) -> bool {
 
 fn file_stem_exists(src_path: &PathBuf, dest_path: &PathBuf) -> bool {
     // Get the file stem of the src_path
-    let src_stem = src_path.file_stem().and_then(|s| s.to_str());
+    let src_stem: Option<&str> = src_path.file_stem().and_then(|s| s.to_str());
 
     // Get the parent directory of dest_path
-    let dest_dir = dest_path
+    let dest_dir: PathBuf = dest_path
         .parent()
         .unwrap_or_else(|| Path::new(""))
         .to_path_buf();
@@ -262,7 +265,7 @@ fn file_stem_exists(src_path: &PathBuf, dest_path: &PathBuf) -> bool {
                 let path = entry.path();
                 if path.is_file() {
                     // Get the file stem of the current file
-                    let dest_stem = path
+                    let dest_stem: Option<String> = path
                         .file_stem()
                         .and_then(|s| s.to_str().map(|s| s.to_lowercase()));
                     // Compare the file stems
