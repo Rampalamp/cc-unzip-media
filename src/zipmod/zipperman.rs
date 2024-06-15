@@ -52,6 +52,9 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf, temp: &mut PathBuf) -> Result<(), 
             continue;
         }
         //If I wanted to check to see if a file exists, ideally it would be done around here before any unzipping to the temp folder of machine executing program.
+        if dest.exists() {
+            continue;
+        }
 
         match src_path.extension().and_then(|ext| ext.to_str()) {
             Some("zip") => {
