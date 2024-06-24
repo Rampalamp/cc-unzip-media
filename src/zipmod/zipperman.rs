@@ -57,13 +57,13 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf, temp: &mut PathBuf) -> Result<(), 
         //this film stem check is kinda not the greatest, many subtitles are being ommitted because they have the same name but different extension...
         //Probably need a more thorough approach to checking for duplicates
         //and then in the process_rar_file I likely need to use the List function to grab the file name, then check if they exist in the dest_path already?
-        if file_stem_exists(&src_path, &dest_path) {
-            println!(
-                "Found Existing File Stem SKIPPING... {}",
-                dest_path.to_str().unwrap()
-            );
-            continue;
-        }
+        // if file_stem_exists(&src_path, &dest_path) {
+        //     println!(
+        //         "Found Existing File Stem SKIPPING... {}",
+        //         dest_path.to_str().unwrap()
+        //     );
+        //     continue;
+        // }
 
         match src_path.extension().and_then(|ext| ext.to_str()) {
             Some("zip") => {
@@ -94,7 +94,10 @@ fn unzip_pantz(src: &PathBuf, dest: &PathBuf, temp: &mut PathBuf) -> Result<(), 
                     );
                     match copy_with_retries(&src_path, &dest_path, 3, Duration::from_secs(2)) {
                         Ok(_) => {}
-                        Err(e) => eprintln!("Failed to copy file: {:?}", e),
+                        Err(e) => {
+                            println!("Path that failed: {}", src_path.to_str().unwrap());
+                            eprintln!("Failed to copy file: {:?}", e)
+                        }
                     }
                     //fs::copy(&src_path, &dest_path)?;
                 }
@@ -195,7 +198,10 @@ fn copy_and_cleanup(temp_path: &PathBuf, destination: &PathBuf) -> io::Result<()
         } else {
             match copy_with_retries(&path, &dest_path, 3, Duration::from_secs(2)) {
                 Ok(_) => {}
-                Err(e) => eprintln!("Failed to copy file: {:?}", e),
+                Err(e) => {
+                    println!("Path that failed: {}", path.to_str().unwrap());
+                    eprintln!("Failed to copy file: {:?}", e)
+                }
             }
             //fs::copy(&path, &dest_path)?;
         }

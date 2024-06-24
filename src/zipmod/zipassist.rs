@@ -217,7 +217,7 @@ fn validate_and_set_paths(
         Ok(())
     } else {
         Err(ZIPError::new(
-            "One of the paths provided did not validate as an absolute path.",
+            "One of the paths provided did not validate as an absolute path. If you are in a Windows/Powershell environment, try to use double quotes over single quotes around paths, and do not end off a path with a backslash. Darn escape characters!",
         ))
     }
 }
